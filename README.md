@@ -63,11 +63,25 @@ Basta iniciar o `claude` na raiz do projeto — os MCPs são carregados automati
 
 O ficheiro `.cursor/mcp.json` configura os mesmos servidores para o Cursor. Após subir os containers, reinicia o Cursor para carregar os servidores.
 
-### Adicionar Engrams globalmente (todos os projetos)
+### Registar MCPs globalmente no Claude Code (todos os projetos)
+
+Corre estes comandos uma vez para que os dois MCPs fiquem disponíveis em qualquer projeto, sem precisar do `.mcp.json` local:
 
 ```bash
+# Planka MCP — controla boards, listas e cards via IA
+claude mcp add --transport sse --scope user planka http://localhost:3001/sse
+
+# Engrams MCP — memória persistente para o agente
 claude mcp add --transport sse --scope user engrams http://localhost:8001/sse
 ```
+
+Verificar os MCPs registados:
+
+```bash
+claude mcp list
+```
+
+> **Nota:** os containers têm de estar a correr (`docker compose up -d`) para os MCPs funcionarem. O registo é permanente; basta fazer uma vez por máquina.
 
 ## Engrams
 

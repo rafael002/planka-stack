@@ -1,45 +1,81 @@
-# --- Engrams Memory Strategy for Claude Code CLI ---
-# Install: Save this content as CLAUDE.md in your project root.
-# Claude Code automatically reads CLAUDE.md for persistent project instructions.
-# You can also place a global version at ~/.claude/CLAUDE.md for cross-project defaults.
-# Configure the Engrams MCP server via `claude mcp add` or in .mcp.json.
-# This repo: Engrams runs in Docker (proxy at localhost:8001, backend not exposed); DB at ./engrams-data/context.db.
+# =============================================================
+# MCP STRATEGY — Planka + Engrams
+# Lido automaticamente pelo Claude Code CLI a partir da raiz do projeto.
+# Aplica-se também a qualquer agente que use estes MCPs.
+# =============================================================
 
-# ENGRAMS MEMORY STRATEGY
-# workspace_id: When Engrams is used via Docker (proxy at localhost:8001), the server only has the path /data/engrams. You MUST pass workspace_id="/data/engrams" in every Engrams tool call — otherwise the server returns "Invalid request parameters". (When Engrams runs locally with stdio, use the absolute path to the current workspace instead.)
-# CRITICAL: Begin EVERY response [ENGRAMS_ACTIVE] or [ENGRAMS_INACTIVE].
-# CRITICAL: No workspace mutations until [ENGRAMS_ACTIVE] confirmed + GOVERNANCE section followed.
+# CRITICAL: Begin EVERY response with the status of both MCPs:
+#   [PLANKA_ACTIVE | ENGRAMS_ACTIVE]
+#   [PLANKA_INACTIVE | ENGRAMS_ACTIVE]
+#   [PLANKA_ACTIVE | ENGRAMS_INACTIVE]
+#   [PLANKA_INACTIVE | ENGRAMS_INACTIVE]
+
+# =============================================================
+# ENGRAMS — Memória persistente
+# =============================================================
+# workspace_id: SEMPRE usar workspace_id="/data/engrams" em todas as chamadas Engrams
+# quando o servidor corre em Docker (proxy localhost:8001). Nunca usar o path do host.
 
 # SECTION DIRECTORY (fetch full detail on demand):
-#   INIT/LOAD_EXISTING/NEW_SETUP — described below (no fetch needed)
 #   GOVERNANCE  → get_custom_data("engrams_strategy","governance")
 #   POST_TASK   → get_custom_data("engrams_strategy","post_task")
-#   SYNC        → get_custom_data("engrams_strategy","sync")
-#   LINKING     → get_custom_data("engrams_strategy","linking")
 #   QUALITY     → get_custom_data("engrams_strategy","quality")
 #   POST_TASK_SETUP → get_custom_data("engrams_strategy","post_task_setup")
 
-INIT (run at session start):
-  1. Engrams via Docker (localhost:8001 proxy): use workspace_id="/data/engrams" in all tool calls. Check DB at ACTUAL_WORKSPACE_ID/engrams-data/context.db (this repo).
-  2. Determine ACTUAL_WORKSPACE_ID from cwd. Look for context.db at ACTUAL_WORKSPACE_ID/engrams/context.db or (this repo) ACTUAL_WORKSPACE_ID/engrams-data/context.db.
-  3. If context.db found → LOAD_EXISTING. Else → NEW_SETUP.
+# =============================================================
+# PLANKA — Gestão de tarefas
+# =============================================================
+# MCP disponível em http://localhost:3001/sse
+# Usar SEMPRE que existirem tarefas, features, bugs ou trabalho a rastrear.
 
-LOAD_EXISTING:
-  Call in parallel (with workspace_id="/data/engrams" when using Docker SSE): get_product_context, get_active_context, get_decisions(limit=5),
-    get_progress(limit=5), get_system_patterns(limit=5),
-    get_custom_data("critical_settings"), get_custom_data("ProjectGlossary"),
-    get_recent_activity_summary(hours_ago=24, limit_per_type=3)
-  If non-empty → [ENGRAMS_ACTIVE], inform user, ask what to work on.
-  If empty DB → [ENGRAMS_ACTIVE], inform user DB is empty.
-  If calls fail → [ENGRAMS_INACTIVE].
+# =============================================================
+# INIT — Executar no início de cada sessão
+# =============================================================
 
-NEW_SETUP:
-  1. Inform user: no DB at ACTUAL_WORKSPACE_ID/engrams/context.db.
-  2. Ask: "Initialize new Engrams database?" [Yes / No]
-  3. If Yes → check for projectBrief.md, offer to import; then fetch POST_TASK_SETUP section.
-  4. If No → [ENGRAMS_INACTIVE].
+INIT (run at session start — call both checks in parallel):
 
-PROACTIVE LOGGING (always active — fetch QUALITY section for full criteria):
-  log_decision: strategic/architectural choices only (prescriptive summaries: "Use X for Y")
-  log_progress: bug fixes, code changes, task completions
-  update_active_context: when focus shifts or issues arise
+  CHECK ENGRAMS:
+    1. Determinar workspace: procurar context.db em ACTUAL_WORKSPACE_ID/engrams-data/engrams/
+       Se encontrado → LOAD_EXISTING. Senão → NEW_SETUP.
+    LOAD_EXISTING — chamar em paralelo (workspace_id="/data/engrams"):
+      get_product_context, get_active_context, get_decisions(limit=5),
+      get_progress(limit=5), get_system_patterns(limit=5),
+      get_recent_activity_summary(hours_ago=24, limit_per_type=3)
+      Se sucesso → [ENGRAMS_ACTIVE]. Se falhar → [ENGRAMS_INACTIVE].
+    NEW_SETUP:
+      Informar utilizador; perguntar "Inicializar base Engrams? [Sim/Não]".
+      Se Sim → fetch POST_TASK_SETUP. Se Não → [ENGRAMS_INACTIVE].
+
+  CHECK PLANKA:
+    Tentar listar os boards disponíveis (ex.: get_boards ou equivalente).
+    Se sucesso → [PLANKA_ACTIVE], mostrar boards disponíveis ao utilizador.
+    Se falhar  → [PLANKA_INACTIVE], informar que o container pode não estar a correr.
+
+# =============================================================
+# USO PROATIVO — regras sempre activas
+# =============================================================
+
+PLANKA PROACTIVE USAGE (quando [PLANKA_ACTIVE]):
+  CRIAR CARD — sempre que o utilizador mencionar uma tarefa nova, feature, bug ou
+    melhoria. Perguntar em qual board/lista criar se não for óbvio.
+  MOVER CARD — ao começar a trabalhar numa tarefa: mover para "In Progress" (ou equivalente).
+    Ao concluir: mover para "Done" (ou equivalente).
+  COMENTAR — ao terminar uma tarefa significativa, adicionar um comentário ao card
+    com um resumo do que foi feito.
+  CONSULTAR — no início da sessão, se [PLANKA_ACTIVE], verificar se há cards
+    "In Progress" do agente para continuar trabalho pendente.
+
+ENGRAMS PROACTIVE LOGGING (quando [ENGRAMS_ACTIVE]):
+  log_decision    → decisões estratégicas/arquiteturais ("Usar X para Y")
+  log_progress    → conclusão de tarefas, correções, alterações de código
+  update_active_context → quando o foco muda ou surgem bloqueios
+  SYNC COM PLANKA → ao criar um card no Planka, guardar o card_id no log_progress
+    do Engrams para rastreabilidade cruzada.
+
+# =============================================================
+# NOTAS
+# =============================================================
+# - Os containers têm de estar a correr: docker compose up -d
+# - Se [PLANKA_INACTIVE] ou [ENGRAMS_INACTIVE], informar o utilizador e sugerir:
+#     docker compose up -d planka-mcp engrams-gateway
+# - Nunca bloquear o fluxo por causa de um MCP inativo; continuar com o que estiver disponível.

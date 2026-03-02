@@ -83,6 +83,25 @@ claude mcp list
 
 > **Nota:** os containers têm de estar a correr (`docker compose up -d`) para os MCPs funcionarem. O registo é permanente; basta fazer uma vez por máquina.
 
+### Comportamento do agente com os MCPs activos
+
+O `CLAUDE.md` instrui o agente a usar ambos os MCPs de forma proativa em todas as sessões:
+
+**Planka** — gestão de tarefas:
+- No início da sessão verifica os boards disponíveis e cards "In Progress" pendentes
+- Cria um card automaticamente quando o utilizador menciona uma tarefa, feature ou bug
+- Move o card para "In Progress" ao começar e para "Done" ao terminar
+- Adiciona um comentário de resumo ao card quando a tarefa é concluída
+
+**Engrams** — memória persistente:
+- Carrega contexto, decisões e progresso anteriores no início de cada sessão
+- Grava decisões arquitecturais com `log_decision`
+- Regista conclusões de tarefas com `log_progress`, incluindo o `card_id` do Planka para rastreabilidade cruzada
+- Atualiza o contexto activo com `update_active_context` quando o foco muda
+
+O agente reporta o estado de ambos os MCPs no início de cada resposta: `[PLANKA_ACTIVE | ENGRAMS_ACTIVE]`.
+Se um dos containers não estiver a correr, o agente avisa e sugere `docker compose up -d`.
+
 ## Engrams
 
 O [Engrams MCP](https://github.com/dmarx/engrams) fornece memória persistente para agentes de IA.

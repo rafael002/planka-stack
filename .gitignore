@@ -1,0 +1,22 @@
+# Secrets — nunca commitar
+.env
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V7
+.Trashes
+
+# Dados runtime do Engrams (SQLite, migrações geradas, vectores, logs)
+engrams-data/engrams/
+engrams-data/logs/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Python / uv (só se alguém instalar deps localmente)
+__pycache__/
+*.pyc
+.venv/

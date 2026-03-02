@@ -1,0 +1,45 @@
+# --- Engrams Memory Strategy for Claude Code CLI ---
+# Install: Save this content as CLAUDE.md in your project root.
+# Claude Code automatically reads CLAUDE.md for persistent project instructions.
+# You can also place a global version at ~/.claude/CLAUDE.md for cross-project defaults.
+# Configure the Engrams MCP server via `claude mcp add` or in .mcp.json.
+# This repo: Engrams runs in Docker (proxy at localhost:8001, backend not exposed); DB at ./engrams-data/context.db.
+
+# ENGRAMS MEMORY STRATEGY
+# workspace_id: When Engrams is used via Docker (proxy at localhost:8001), the server only has the path /data/engrams. You MUST pass workspace_id="/data/engrams" in every Engrams tool call — otherwise the server returns "Invalid request parameters". (When Engrams runs locally with stdio, use the absolute path to the current workspace instead.)
+# CRITICAL: Begin EVERY response [ENGRAMS_ACTIVE] or [ENGRAMS_INACTIVE].
+# CRITICAL: No workspace mutations until [ENGRAMS_ACTIVE] confirmed + GOVERNANCE section followed.
+
+# SECTION DIRECTORY (fetch full detail on demand):
+#   INIT/LOAD_EXISTING/NEW_SETUP — described below (no fetch needed)
+#   GOVERNANCE  → get_custom_data("engrams_strategy","governance")
+#   POST_TASK   → get_custom_data("engrams_strategy","post_task")
+#   SYNC        → get_custom_data("engrams_strategy","sync")
+#   LINKING     → get_custom_data("engrams_strategy","linking")
+#   QUALITY     → get_custom_data("engrams_strategy","quality")
+#   POST_TASK_SETUP → get_custom_data("engrams_strategy","post_task_setup")
+
+INIT (run at session start):
+  1. Engrams via Docker (localhost:8001 proxy): use workspace_id="/data/engrams" in all tool calls. Check DB at ACTUAL_WORKSPACE_ID/engrams-data/context.db (this repo).
+  2. Determine ACTUAL_WORKSPACE_ID from cwd. Look for context.db at ACTUAL_WORKSPACE_ID/engrams/context.db or (this repo) ACTUAL_WORKSPACE_ID/engrams-data/context.db.
+  3. If context.db found → LOAD_EXISTING. Else → NEW_SETUP.
+
+LOAD_EXISTING:
+  Call in parallel (with workspace_id="/data/engrams" when using Docker SSE): get_product_context, get_active_context, get_decisions(limit=5),
+    get_progress(limit=5), get_system_patterns(limit=5),
+    get_custom_data("critical_settings"), get_custom_data("ProjectGlossary"),
+    get_recent_activity_summary(hours_ago=24, limit_per_type=3)
+  If non-empty → [ENGRAMS_ACTIVE], inform user, ask what to work on.
+  If empty DB → [ENGRAMS_ACTIVE], inform user DB is empty.
+  If calls fail → [ENGRAMS_INACTIVE].
+
+NEW_SETUP:
+  1. Inform user: no DB at ACTUAL_WORKSPACE_ID/engrams/context.db.
+  2. Ask: "Initialize new Engrams database?" [Yes / No]
+  3. If Yes → check for projectBrief.md, offer to import; then fetch POST_TASK_SETUP section.
+  4. If No → [ENGRAMS_INACTIVE].
+
+PROACTIVE LOGGING (always active — fetch QUALITY section for full criteria):
+  log_decision: strategic/architectural choices only (prescriptive summaries: "Use X for Y")
+  log_progress: bug fixes, code changes, task completions
+  update_active_context: when focus shifts or issues arise

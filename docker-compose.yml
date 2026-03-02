@@ -1,0 +1,88 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: planka-postgres
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-planka}
+      POSTGRES_USER: ${POSTGRES_USER:-planka}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-planka}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-planka} -d ${POSTGRES_DB:-planka}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - planka-net
+
+  planka:
+    image: ghcr.io/plankanban/planka:latest
+    container_name: planka-app
+    restart: unless-stopped
+    ports:
+      - "80:1337"
+    volumes:
+      - planka_user_avatars:/app/public/user-avatars
+      - planka_project_background_images:/app/public/project-background-images
+      - planka_attachments:/app/private/attachments
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-planka}:${POSTGRES_PASSWORD:-planka}@postgres/${POSTGRES_DB:-planka}
+      SECRET_KEY: ${SECRET_KEY}
+      BASE_URL: http://planka.local
+      # Admin inicial = user do agente MCP (criado no primeiro boot)
+      DEFAULT_ADMIN_EMAIL: ${MCP_AGENT_EMAIL}
+      DEFAULT_ADMIN_PASSWORD: ${MCP_AGENT_PASSWORD:-buchecha123}
+      DEFAULT_ADMIN_NAME: ${MCP_AGENT_NAME}
+      DEFAULT_ADMIN_USERNAME: ${MCP_AGENT_NAME}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - planka-net
+
+  planka-mcp:
+    image: chmald/planka-mcp:latest
+    container_name: planka-mcp
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      MCP_TRANSPORT: sse
+      MCP_PORT: "3001"
+      PLANKA_BASE_URL: http://planka:1337
+      PLANKA_USERNAME: ${MCP_AGENT_NAME}
+      PLANKA_PASSWORD: ${MCP_AGENT_PASSWORD:-buchecha123}
+    depends_on:
+      - planka
+    networks:
+      - planka-net
+
+  # Engrams: um único container — MCP interno (stdio), só o proxy exposto (8001).
+  engrams-gateway:
+    build:
+      context: ./engrams-gateway
+      dockerfile: Dockerfile
+    container_name: engrams-gateway
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./engrams-data:/data/engrams
+    environment:
+      WORKSPACE_DIR: /data/engrams
+      PROXY_PORT: "8001"
+      PROXY_PUBLIC_URL: "http://127.0.0.1:8001"
+    networks:
+      - planka-net
+
+networks:
+  planka-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  planka_user_avatars:
+  planka_project_background_images:
+  planka_attachments:

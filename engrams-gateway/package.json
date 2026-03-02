@@ -1,0 +1,13 @@
+{
+  "name": "engrams-gateway",
+  "version": "1.0.0",
+  "description": "MCP Engrams em stdio (interno) + proxy HTTP exposto; um único container",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

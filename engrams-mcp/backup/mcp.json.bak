@@ -1,1 +1,0 @@
-{"mcpServers":{"planka":{"type":"sse","url":"http://localhost:3001/sse"},"engrams":{"type":"sse","url":"http://localhost:8000/sse"}}}
